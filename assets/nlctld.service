@@ -1,0 +1,28 @@
+[Unit]
+Description=Nanoleaf LED strip controller daemon
+After=sysinit.target local-fs.target
+
+[Service]
+Type=simple
+User=nlctl
+Group=nlctl
+
+# Creates /run/nlctl owned by nlctl:nlctl with mode 0755.
+RuntimeDirectory=nlctl
+RuntimeDirectoryMode=0755
+StateDirectory=nlctl
+StateDirectoryMode=0700
+
+ExecStart=/usr/local/bin/nlctld
+Restart=on-failure
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+
+# If you want screen-reactive mode to work, uncomment and set these:
+# Environment=DISPLAY=:0
+# Environment=XAUTHORITY=/home/YOUR_USER/.Xauthority
+
+[Install]
+WantedBy=multi-user.target

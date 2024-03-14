@@ -1,0 +1,6 @@
+-std=c99
+-D_GNU_SOURCE
+-Iinclude
+-Isrc
+-Itests
+-I/usr/include/hidapi
