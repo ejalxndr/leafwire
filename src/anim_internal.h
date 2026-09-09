@@ -1,8 +1,8 @@
-#ifndef NL_ANIM_INTERNAL_H
-#define NL_ANIM_INTERNAL_H
+#ifndef LW_ANIM_INTERNAL_H
+#define LW_ANIM_INTERNAL_H
 
-#include "nlctl.h"
+#include "leafwire.h"
 
-struct nl_color nl_hsv_to_rgb(double h, double s, double v);
+struct lw_color lw_hsv_to_rgb(double h, double s, double v);
 
 #endif

@@ -2,21 +2,21 @@
 
 #include <string.h>
 
-static const struct nl_zone_color NL_ZONE_ZERO = { 0.0f, 0.0f, 0.0f };
+static const struct lw_zone_color LW_ZONE_ZERO = { 0.0f, 0.0f, 0.0f };
 
-size_t nl_zone_expected_count(size_t bottom, size_t left, size_t top, size_t right)
+size_t lw_zone_expected_count(size_t bottom, size_t left, size_t top, size_t right)
 {
     if (left < 1 || right < 1 || top < 2)
         return 0;
     return bottom + (left - 1) + (top - 2) + (right - 1);
 }
 
-static struct nl_zone_color average_region(const uint8_t *data, size_t data_len,
+static struct lw_zone_color average_region(const uint8_t *data, size_t data_len,
                                            int width, int bpp, int x0, int y0, int w,
                                            int h)
 {
     unsigned long long r = 0, g = 0, b = 0, n = 0;
-    struct nl_zone_color out;
+    struct lw_zone_color out;
     int x, y;
 
     for (y = y0; y < y0 + h; y++) {
@@ -32,7 +32,7 @@ static struct nl_zone_color average_region(const uint8_t *data, size_t data_len,
     }
 
     if (n == 0)
-        return NL_ZONE_ZERO;
+        return LW_ZONE_ZERO;
 
     out.r = (float)((double)r / (double)n / 255.0);
     out.g = (float)((double)g / (double)n / 255.0);
@@ -40,11 +40,11 @@ static struct nl_zone_color average_region(const uint8_t *data, size_t data_len,
     return out;
 }
 
-size_t nl_zone_analyze(int zone_depth, const uint8_t *data, size_t data_len, int width,
+size_t lw_zone_analyze(int zone_depth, const uint8_t *data, size_t data_len, int width,
                        int height, int bpp, size_t bottom, size_t left, size_t top,
-                       size_t right, struct nl_zone_color *out, size_t out_cap)
+                       size_t right, struct lw_zone_color *out, size_t out_cap)
 {
-    size_t total = nl_zone_expected_count(bottom, left, top, right);
+    size_t total = lw_zone_expected_count(bottom, left, top, right);
     size_t idx = 0;
     size_t i;
     int depth;

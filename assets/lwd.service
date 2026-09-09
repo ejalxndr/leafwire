@@ -4,16 +4,16 @@ After=sysinit.target local-fs.target
 
 [Service]
 Type=simple
-User=nlctl
-Group=nlctl
+User=leafwire
+Group=leafwire
 
-# Creates /run/nlctl owned by nlctl:nlctl with mode 0755.
-RuntimeDirectory=nlctl
+# Creates /run/leafwire owned by leafwire:leafwire with mode 0755.
+RuntimeDirectory=leafwire
 RuntimeDirectoryMode=0755
-StateDirectory=nlctl
+StateDirectory=leafwire
 StateDirectoryMode=0700
 
-ExecStart=/usr/local/bin/nlctld
+ExecStart=/usr/local/bin/lwd
 Restart=on-failure
 RestartSec=5
 

@@ -1,4 +1,4 @@
-#define NL_LOG_PREFIX "nlctld"
+#define LW_LOG_PREFIX "lwd"
 
 #include <errno.h>
 #include <signal.h>
@@ -16,7 +16,7 @@
 
 #include "ipc.h"
 #include "log.h"
-#include "nlctl.h"
+#include "leafwire.h"
 #include "proto.h"
 
 #define RECONNECT_INTERVAL_MS 2000
@@ -30,8 +30,8 @@ enum dev_state {
 
 struct daemon {
     enum dev_state state;
-    struct nl_device *dev;
-    struct nl_anim *anim;
+    struct lw_device *dev;
+    struct lw_anim *anim;
     char mode_name[16];
     const char *sock_path;
     int first_connect;
@@ -45,16 +45,16 @@ struct daemon {
 
 static volatile sig_atomic_t g_stop;
 
-static const char *mode_name(nl_mode m)
+static const char *mode_name(lw_mode m)
 {
     switch (m) {
-    case NL_MODE_SOLID:     return "solid";
-    case NL_MODE_BREATHING: return "breathing";
-    case NL_MODE_WAVE:      return "wave";
-    case NL_MODE_RAINBOW:   return "rainbow";
-    case NL_MODE_REACTIVE:  return "reactive";
-    case NL_MODE_OFF:       return "off";
-    case NL_MODE_STATUS:    return "status";
+    case LW_MODE_SOLID:     return "solid";
+    case LW_MODE_BREATHING: return "breathing";
+    case LW_MODE_WAVE:      return "wave";
+    case LW_MODE_RAINBOW:   return "rainbow";
+    case LW_MODE_REACTIVE:  return "reactive";
+    case LW_MODE_OFF:       return "off";
+    case LW_MODE_STATUS:    return "status";
     }
     return "unknown";
 }
@@ -124,10 +124,10 @@ static void parent_dir(const char *path, char *out, size_t out_sz)
     out[n] = '\0';
 }
 
-static struct nl_anim *build_animation(const struct nl_request *req, char errbuf[NL_ERRBUF])
+static struct lw_anim *build_animation(const struct lw_request *req, char errbuf[LW_ERRBUF])
 {
-    struct nl_color white = { 255, 255, 255 };
-    struct nl_color c = white;
+    struct lw_color white = { 255, 255, 255 };
+    struct lw_color c = white;
 
     if (req->has_color) {
         c.r = req->color[0];
@@ -135,60 +135,60 @@ static struct nl_anim *build_animation(const struct nl_request *req, char errbuf
         c.b = req->color[2];
     }
 
-    switch ((nl_mode)req->mode) {
-    case NL_MODE_SOLID:
-        return nl_anim_solid(c);
-    case NL_MODE_BREATHING:
-        return nl_anim_breathing(c, 3000, 500);
-    case NL_MODE_WAVE:
-        return nl_anim_wave(c, 2000, 50);
-    case NL_MODE_RAINBOW:
-        return nl_anim_rainbow(5000, 100);
-    case NL_MODE_OFF: {
-        struct nl_color black = { 0, 0, 0 };
-        return nl_anim_solid(black);
+    switch ((lw_mode)req->mode) {
+    case LW_MODE_SOLID:
+        return lw_anim_solid(c);
+    case LW_MODE_BREATHING:
+        return lw_anim_breathing(c, 3000, 500);
+    case LW_MODE_WAVE:
+        return lw_anim_wave(c, 2000, 50);
+    case LW_MODE_RAINBOW:
+        return lw_anim_rainbow(5000, 100);
+    case LW_MODE_OFF: {
+        struct lw_color black = { 0, 0, 0 };
+        return lw_anim_solid(black);
     }
-    case NL_MODE_REACTIVE: {
+    case LW_MODE_REACTIVE: {
         uint8_t zones[4];
         int i;
         for (i = 0; i < 4; i++)
             zones[i] = req->zones[i] ? req->zones[i] : (uint8_t)10;
-        return nl_anim_reactive(zones, 0.9f, 10, 60,
+        return lw_anim_reactive(zones, 0.9f, 10, 60,
                                 req->display[0] ? req->display : NULL,
                                 req->xauthority[0] ? req->xauthority : NULL, errbuf);
     }
-    case NL_MODE_STATUS:
+    case LW_MODE_STATUS:
         break;
     }
-    snprintf(errbuf, NL_ERRBUF, "invalid mode %u", req->mode);
+    snprintf(errbuf, LW_ERRBUF, "invalid mode %u", req->mode);
     return NULL;
 }
 
-static void save_state(const struct nl_request *req)
+static void save_state(const struct lw_request *req)
 {
     char dir[256];
-    struct nl_request persisted = *req;
+    struct lw_request persisted = *req;
     FILE *f;
 
     memset(persisted.display, 0, sizeof(persisted.display));
     memset(persisted.xauthority, 0, sizeof(persisted.xauthority));
 
-    parent_dir(NL_STATE_PATH, dir, sizeof(dir));
+    parent_dir(LW_STATE_PATH, dir, sizeof(dir));
     mkdir_p(dir);
 
-    f = fopen(NL_STATE_PATH, "wb");
+    f = fopen(LW_STATE_PATH, "wb");
     if (!f) {
-        nl_warn("could not save state: %s", strerror(errno));
+        lw_warn("could not save state: %s", strerror(errno));
         return;
     }
     if (fwrite(&persisted, sizeof(persisted), 1, f) != 1)
-        nl_warn("could not write state file");
+        lw_warn("could not write state file");
     fclose(f);
 }
 
-static int load_state(struct nl_request *out)
+static int load_state(struct lw_request *out)
 {
-    FILE *f = fopen(NL_STATE_PATH, "rb");
+    FILE *f = fopen(LW_STATE_PATH, "rb");
     size_t n;
 
     if (!f)
@@ -197,11 +197,11 @@ static int load_state(struct nl_request *out)
     fclose(f);
 
     if (n != 1) {
-        nl_warn("ignoring unreadable state file");
+        lw_warn("ignoring unreadable state file");
         return 0;
     }
-    if (out->version != NL_PROTO_VERSION || out->mode > NL_MODE_MAX) {
-        nl_warn("ignoring state file with incompatible version/mode");
+    if (out->version != LW_PROTO_VERSION || out->mode > LW_MODE_MAX) {
+        lw_warn("ignoring state file with incompatible version/mode");
         return 0;
     }
     out->display[0] = '\0';
@@ -209,7 +209,7 @@ static int load_state(struct nl_request *out)
     return 1;
 }
 
-static void set_mode_name(struct daemon *d, nl_mode m)
+static void set_mode_name(struct daemon *d, lw_mode m)
 {
     snprintf(d->mode_name, sizeof(d->mode_name), "%s", mode_name(m));
 }
@@ -217,7 +217,7 @@ static void set_mode_name(struct daemon *d, nl_mode m)
 static void go_offline(struct daemon *d)
 {
     if (d->dev) {
-        nl_device_close(d->dev);
+        lw_device_close(d->dev);
         d->dev = NULL;
     }
     d->state = DEV_DOWN;
@@ -227,40 +227,40 @@ static void go_offline(struct daemon *d)
 
 static void try_connect(struct daemon *d)
 {
-    char errbuf[NL_ERRBUF];
-    struct nl_device *dev = NULL;
-    nl_status st;
+    char errbuf[LW_ERRBUF];
+    struct lw_device *dev = NULL;
+    lw_status st;
 
-    st = nl_device_open(&dev, errbuf);
-    if (st != NL_OK) {
-        nl_info("waiting for device: %s", errbuf);
+    st = lw_device_open(&dev, errbuf);
+    if (st != LW_OK) {
+        lw_info("waiting for device: %s", errbuf);
         return;
     }
-    st = nl_device_initialize(dev, errbuf);
-    if (st != NL_OK) {
-        nl_err("device init failed: %s", errbuf);
-        nl_device_close(dev);
+    st = lw_device_initialize(dev, errbuf);
+    if (st != LW_OK) {
+        lw_err("device init failed: %s", errbuf);
+        lw_device_close(dev);
         return;
     }
 
     d->dev = dev;
     d->state = DEV_UP;
     timer_disarm(d->reconnect_fd);
-    nl_info("device connected - %zu LEDs", nl_device_zone_count(dev));
+    lw_info("device connected - %zu LEDs", lw_device_zone_count(dev));
 
     if (d->first_connect) {
-        struct nl_request saved;
+        struct lw_request saved;
         d->first_connect = 0;
         if (load_state(&saved)) {
-            struct nl_anim *restored = build_animation(&saved, errbuf);
+            struct lw_anim *restored = build_animation(&saved, errbuf);
             if (restored) {
                 if (d->anim)
                     d->anim->destroy(d->anim);
                 d->anim = restored;
-                set_mode_name(d, (nl_mode)saved.mode);
-                nl_info("restored mode '%s' from state file", d->mode_name);
+                set_mode_name(d, (lw_mode)saved.mode);
+                lw_info("restored mode '%s' from state file", d->mode_name);
             } else {
-                nl_err("could not restore saved state: %s", errbuf);
+                lw_err("could not restore saved state: %s", errbuf);
             }
         }
     }
@@ -270,22 +270,22 @@ static void try_connect(struct daemon *d)
 
 static void handle_frame(struct daemon *d)
 {
-    char errbuf[NL_ERRBUF];
+    char errbuf[LW_ERRBUF];
     uint32_t delay_ms = 50;
-    nl_status st;
+    lw_status st;
 
     drain_timer(d->frame_fd);
     if (d->state != DEV_UP || !d->anim)
         return;
 
     st = d->anim->run(d->anim, d->dev, &delay_ms, errbuf);
-    if (st == NL_ERR_HID_IO) {
-        nl_err("device error (%s), attempting reconnect...", errbuf);
+    if (st == LW_ERR_HID_IO) {
+        lw_err("device error (%s), attempting reconnect...", errbuf);
         go_offline(d);
         return;
     }
-    if (st != NL_OK)
-        nl_warn("animation frame failed: %s", errbuf);
+    if (st != LW_OK)
+        lw_warn("animation frame failed: %s", errbuf);
 
     if (delay_ms == 0)
         delay_ms = 1;
@@ -294,12 +294,12 @@ static void handle_frame(struct daemon *d)
 
 static void handle_client(struct daemon *d)
 {
-    char errbuf[NL_ERRBUF];
-    struct nl_request req;
-    struct nl_response resp;
+    char errbuf[LW_ERRBUF];
+    struct lw_request req;
+    struct lw_response resp;
     struct timeval tv;
     int cfd;
-    nl_status st;
+    lw_status st;
 
     cfd = accept(d->listen_fd, NULL, NULL);
     if (cfd < 0)
@@ -311,28 +311,28 @@ static void handle_client(struct daemon *d)
     setsockopt(cfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     memset(&resp, 0, sizeof(resp));
-    resp.version = NL_PROTO_VERSION;
+    resp.version = LW_PROTO_VERSION;
 
     st = ipc_read_full(cfd, &req, sizeof(req));
-    if (st != NL_OK) {
+    if (st != LW_OK) {
         resp.ok = 0;
-        snprintf(resp.text, sizeof(resp.text), "bad request: %s", nl_strerror(st));
+        snprintf(resp.text, sizeof(resp.text), "bad request: %s", lw_strerror(st));
         ipc_write_full(cfd, &resp, sizeof(resp));
         close(cfd);
         return;
     }
 
-    if (req.version != NL_PROTO_VERSION || req.mode > NL_MODE_MAX) {
+    if (req.version != LW_PROTO_VERSION || req.mode > LW_MODE_MAX) {
         resp.ok = 0;
         snprintf(resp.text, sizeof(resp.text), "unsupported protocol version/mode");
         ipc_write_full(cfd, &resp, sizeof(resp));
         close(cfd);
         return;
     }
-    req.display[NL_DISPLAY_MAX - 1] = '\0';
-    req.xauthority[NL_XAUTH_MAX - 1] = '\0';
+    req.display[LW_DISPLAY_MAX - 1] = '\0';
+    req.xauthority[LW_XAUTH_MAX - 1] = '\0';
 
-    if (req.mode == NL_MODE_STATUS) {
+    if (req.mode == LW_MODE_STATUS) {
         resp.ok = 1;
         snprintf(resp.text, sizeof(resp.text), "%s", d->mode_name);
         ipc_write_full(cfd, &resp, sizeof(resp));
@@ -349,9 +349,9 @@ static void handle_client(struct daemon *d)
     }
 
     errbuf[0] = '\0';
-    struct nl_anim *new_anim = build_animation(&req, errbuf);
+    struct lw_anim *new_anim = build_animation(&req, errbuf);
     if (!new_anim) {
-        nl_err("failed to build animation: %s", errbuf);
+        lw_err("failed to build animation: %s", errbuf);
         resp.ok = 0;
         snprintf(resp.text, sizeof(resp.text), "%s",
                  errbuf[0] ? errbuf : "could not build animation");
@@ -363,10 +363,10 @@ static void handle_client(struct daemon *d)
     if (d->anim)
         d->anim->destroy(d->anim);
     d->anim = new_anim;
-    set_mode_name(d, (nl_mode)req.mode);
-    nl_info("switched to %s", d->mode_name);
+    set_mode_name(d, (lw_mode)req.mode);
+    lw_info("switched to %s", d->mode_name);
 
-    if (req.mode != NL_MODE_REACTIVE)
+    if (req.mode != LW_MODE_REACTIVE)
         save_state(&req);
 
     timer_set(d->frame_fd, RENDER_SOON_MS, 0);
@@ -393,46 +393,46 @@ static int add_epoll(int ep, int fd)
 
 int main(void)
 {
-    char errbuf[NL_ERRBUF];
+    char errbuf[LW_ERRBUF];
     char dir[256];
     struct daemon d;
     sigset_t mask;
-    struct nl_color black = { 0, 0, 0 };
+    struct lw_color black = { 0, 0, 0 };
 
     memset(&d, 0, sizeof(d));
     d.state = DEV_DOWN;
     d.first_connect = 1;
     d.listen_fd = d.frame_fd = d.reconnect_fd = d.sig_fd = d.epoll_fd = -1;
     snprintf(d.mode_name, sizeof(d.mode_name), "off");
-    d.sock_path = getenv("NLCTL_SOCKET");
+    d.sock_path = getenv("LEAFWIRE_SOCKET");
     if (!d.sock_path || !d.sock_path[0])
-        d.sock_path = NL_SOCKET_PATH;
+        d.sock_path = LW_SOCKET_PATH;
 
     signal(SIGPIPE, SIG_IGN);
 
-    d.anim = nl_anim_solid(black);
+    d.anim = lw_anim_solid(black);
     if (!d.anim) {
-        nl_err("out of memory");
+        lw_err("out of memory");
         return 1;
     }
 
     parent_dir(d.sock_path, dir, sizeof(dir));
     if (mkdir_p(dir) != 0) {
-        nl_err("could not create socket directory %s: %s", dir, strerror(errno));
+        lw_err("could not create socket directory %s: %s", dir, strerror(errno));
         return 1;
     }
 
     d.listen_fd = ipc_listen_unix(d.sock_path, errbuf);
     if (d.listen_fd < 0) {
-        nl_err("%s", errbuf);
+        lw_err("%s", errbuf);
         return 1;
     }
-    nl_info("socket at %s", d.sock_path);
+    lw_info("socket at %s", d.sock_path);
 
     d.frame_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     d.reconnect_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     if (d.frame_fd < 0 || d.reconnect_fd < 0) {
-        nl_err("timerfd_create: %s", strerror(errno));
+        lw_err("timerfd_create: %s", strerror(errno));
         return 1;
     }
 
@@ -440,12 +440,12 @@ int main(void)
     sigaddset(&mask, SIGTERM);
     sigaddset(&mask, SIGINT);
     if (sigprocmask(SIG_BLOCK, &mask, NULL) != 0) {
-        nl_err("sigprocmask: %s", strerror(errno));
+        lw_err("sigprocmask: %s", strerror(errno));
         return 1;
     }
     d.sig_fd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
     if (d.sig_fd < 0) {
-        nl_err("signalfd: %s", strerror(errno));
+        lw_err("signalfd: %s", strerror(errno));
         return 1;
     }
     signal(SIGTERM, on_signal);
@@ -456,7 +456,7 @@ int main(void)
         add_epoll(d.epoll_fd, d.frame_fd) != 0 ||
         add_epoll(d.epoll_fd, d.reconnect_fd) != 0 ||
         add_epoll(d.epoll_fd, d.sig_fd) != 0) {
-        nl_err("epoll setup failed: %s", strerror(errno));
+        lw_err("epoll setup failed: %s", strerror(errno));
         return 1;
     }
 
@@ -470,7 +470,7 @@ int main(void)
         if (n < 0) {
             if (errno == EINTR)
                 continue;
-            nl_err("epoll_wait: %s", strerror(errno));
+            lw_err("epoll_wait: %s", strerror(errno));
             break;
         }
 
@@ -490,12 +490,12 @@ int main(void)
         }
     }
 
-    nl_info("shutting down");
+    lw_info("shutting down");
     if (d.anim)
         d.anim->destroy(d.anim);
     if (d.dev)
-        nl_device_close(d.dev);
-    nl_lib_shutdown();
+        lw_device_close(d.dev);
+    lw_lib_shutdown();
     if (d.epoll_fd >= 0)
         close(d.epoll_fd);
     if (d.sig_fd >= 0)

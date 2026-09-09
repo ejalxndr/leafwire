@@ -8,7 +8,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-nl_status ipc_read_full(int fd, void *buf, size_t n)
+lw_status ipc_read_full(int fd, void *buf, size_t n)
 {
     unsigned char *p = buf;
     size_t got = 0;
@@ -16,20 +16,20 @@ nl_status ipc_read_full(int fd, void *buf, size_t n)
     while (got < n) {
         ssize_t r = read(fd, p + got, n - got);
         if (r == 0)
-            return NL_ERR_PROTO;
+            return LW_ERR_PROTO;
         if (r < 0) {
             if (errno == EINTR)
                 continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return NL_ERR_TIMEOUT;
-            return NL_ERR_SOCKET;
+                return LW_ERR_TIMEOUT;
+            return LW_ERR_SOCKET;
         }
         got += (size_t)r;
     }
-    return NL_OK;
+    return LW_OK;
 }
 
-nl_status ipc_write_full(int fd, const void *buf, size_t n)
+lw_status ipc_write_full(int fd, const void *buf, size_t n)
 {
     const unsigned char *p = buf;
     size_t sent = 0;
@@ -40,27 +40,27 @@ nl_status ipc_write_full(int fd, const void *buf, size_t n)
             if (errno == EINTR)
                 continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return NL_ERR_TIMEOUT;
-            return NL_ERR_SOCKET;
+                return LW_ERR_TIMEOUT;
+            return LW_ERR_SOCKET;
         }
         sent += (size_t)w;
     }
-    return NL_OK;
+    return LW_OK;
 }
 
-static int fill_addr(struct sockaddr_un *addr, const char *path, char errbuf[NL_ERRBUF])
+static int fill_addr(struct sockaddr_un *addr, const char *path, char errbuf[LW_ERRBUF])
 {
     memset(addr, 0, sizeof(*addr));
     addr->sun_family = AF_UNIX;
     if (strlen(path) >= sizeof(addr->sun_path)) {
-        snprintf(errbuf, NL_ERRBUF, "socket path too long: %s", path);
+        snprintf(errbuf, LW_ERRBUF, "socket path too long: %s", path);
         return -1;
     }
     strcpy(addr->sun_path, path);
     return 0;
 }
 
-int ipc_listen_unix(const char *path, char errbuf[NL_ERRBUF])
+int ipc_listen_unix(const char *path, char errbuf[LW_ERRBUF])
 {
     struct sockaddr_un addr;
     int fd;
@@ -72,24 +72,24 @@ int ipc_listen_unix(const char *path, char errbuf[NL_ERRBUF])
 
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        snprintf(errbuf, NL_ERRBUF, "socket: %s", strerror(errno));
+        snprintf(errbuf, LW_ERRBUF, "socket: %s", strerror(errno));
         return -1;
     }
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        snprintf(errbuf, NL_ERRBUF, "bind %s: %s", path, strerror(errno));
+        snprintf(errbuf, LW_ERRBUF, "bind %s: %s", path, strerror(errno));
         close(fd);
         return -1;
     }
 
     if (chmod(path, 0666) != 0) {
-        snprintf(errbuf, NL_ERRBUF, "chmod %s: %s", path, strerror(errno));
+        snprintf(errbuf, LW_ERRBUF, "chmod %s: %s", path, strerror(errno));
         close(fd);
         return -1;
     }
 
     if (listen(fd, 8) != 0) {
-        snprintf(errbuf, NL_ERRBUF, "listen %s: %s", path, strerror(errno));
+        snprintf(errbuf, LW_ERRBUF, "listen %s: %s", path, strerror(errno));
         close(fd);
         return -1;
     }
@@ -97,7 +97,7 @@ int ipc_listen_unix(const char *path, char errbuf[NL_ERRBUF])
     return fd;
 }
 
-int ipc_connect_unix(const char *path, char errbuf[NL_ERRBUF])
+int ipc_connect_unix(const char *path, char errbuf[LW_ERRBUF])
 {
     struct sockaddr_un addr;
     int fd;
@@ -107,12 +107,12 @@ int ipc_connect_unix(const char *path, char errbuf[NL_ERRBUF])
 
     fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        snprintf(errbuf, NL_ERRBUF, "socket: %s", strerror(errno));
+        snprintf(errbuf, LW_ERRBUF, "socket: %s", strerror(errno));
         return -1;
     }
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        snprintf(errbuf, NL_ERRBUF, "connect %s: %s", path, strerror(errno));
+        snprintf(errbuf, LW_ERRBUF, "connect %s: %s", path, strerror(errno));
         close(fd);
         return -1;
     }

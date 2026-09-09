@@ -1,4 +1,4 @@
-#define NL_LOG_PREFIX "nlctl"
+#define LW_LOG_PREFIX "lwctl"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,30 +6,30 @@
 #include <unistd.h>
 
 #include "ipc.h"
-#include "nlctl.h"
+#include "leafwire.h"
 #include "proto.h"
 
 struct subcmd {
     const char *name;
-    nl_mode mode;
+    lw_mode mode;
     int takes_color;
     int takes_zones;
 };
 
 static const struct subcmd SUBCMDS[] = {
-    { "solid",     NL_MODE_SOLID,     1, 0 },
-    { "breathing", NL_MODE_BREATHING, 1, 0 },
-    { "wave",      NL_MODE_WAVE,      1, 0 },
-    { "rainbow",   NL_MODE_RAINBOW,   0, 0 },
-    { "reactive",  NL_MODE_REACTIVE,  0, 1 },
-    { "off",       NL_MODE_OFF,       0, 0 },
-    { "status",    NL_MODE_STATUS,    0, 0 },
+    { "solid",     LW_MODE_SOLID,     1, 0 },
+    { "breathing", LW_MODE_BREATHING, 1, 0 },
+    { "wave",      LW_MODE_WAVE,      1, 0 },
+    { "rainbow",   LW_MODE_RAINBOW,   0, 0 },
+    { "reactive",  LW_MODE_REACTIVE,  0, 1 },
+    { "off",       LW_MODE_OFF,       0, 0 },
+    { "status",    LW_MODE_STATUS,    0, 0 },
 };
 
 static void usage(FILE *f)
 {
     fprintf(f,
-            "usage: nlctl <command> [options]\n"
+            "usage: lwctl <command> [options]\n"
             "\n"
             "commands:\n"
             "  solid      [--color R,G,B]\n"
@@ -70,15 +70,15 @@ static int parse_triplet(const char *s, long *out, int count, long lo, long hi)
 int main(int argc, char **argv)
 {
     const struct subcmd *sc = NULL;
-    struct nl_request req;
-    struct nl_response resp;
+    struct lw_request req;
+    struct lw_response resp;
     const char *color_arg = NULL;
     const char *zones_arg = NULL;
-    char errbuf[NL_ERRBUF];
+    char errbuf[LW_ERRBUF];
     size_t i;
     int a;
     int fd;
-    nl_status st;
+    lw_status st;
 
     if (argc >= 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         usage(stdout);
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
         }
     }
     if (!sc) {
-        fprintf(stderr, "nlctl: unknown command '%s'\n", argv[1]);
+        fprintf(stderr, "lwctl: unknown command '%s'\n", argv[1]);
         usage(stderr);
         return 2;
     }
@@ -107,20 +107,20 @@ int main(int argc, char **argv)
         } else if (sc->takes_zones && strcmp(argv[a], "--zones") == 0 && a + 1 < argc) {
             zones_arg = argv[++a];
         } else {
-            fprintf(stderr, "nlctl: unexpected argument '%s'\n", argv[a]);
+            fprintf(stderr, "lwctl: unexpected argument '%s'\n", argv[a]);
             usage(stderr);
             return 2;
         }
     }
 
     memset(&req, 0, sizeof(req));
-    req.version = NL_PROTO_VERSION;
+    req.version = LW_PROTO_VERSION;
     req.mode = (uint8_t)sc->mode;
 
     if (color_arg) {
         long v[3];
         if (parse_triplet(color_arg, v, 3, 0, 255) != 0) {
-            fprintf(stderr, "nlctl: --color must be R,G,B (e.g. 255,0,128)\n");
+            fprintf(stderr, "lwctl: --color must be R,G,B (e.g. 255,0,128)\n");
             return 2;
         }
         req.has_color = 1;
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     if (zones_arg) {
         long v[4];
         if (parse_triplet(zones_arg, v, 4, 0, 255) != 0) {
-            fprintf(stderr, "nlctl: --zones must be B,L,T,R (e.g. 10,10,10,10)\n");
+            fprintf(stderr, "lwctl: --zones must be B,L,T,R (e.g. 10,10,10,10)\n");
             return 2;
         }
         req.zones[0] = (uint8_t)v[0];
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
         req.zones[3] = (uint8_t)v[3];
     }
 
-    if (sc->mode == NL_MODE_REACTIVE) {
+    if (sc->mode == LW_MODE_REACTIVE) {
         const char *disp = getenv("DISPLAY");
         const char *xauth = getenv("XAUTHORITY");
         if (disp)
@@ -151,44 +151,44 @@ int main(int argc, char **argv)
     }
 
     {
-        const char *sock = getenv("NLCTL_SOCKET");
+        const char *sock = getenv("LEAFWIRE_SOCKET");
         if (!sock || !sock[0])
-            sock = NL_SOCKET_PATH;
+            sock = LW_SOCKET_PATH;
         fd = ipc_connect_unix(sock, errbuf);
     }
     if (fd < 0) {
-        fprintf(stderr, "nlctl: %s - is nlctld running?\n", errbuf);
+        fprintf(stderr, "lwctl: %s - is lwd running?\n", errbuf);
         return 1;
     }
 
     st = ipc_write_full(fd, &req, sizeof(req));
-    if (st != NL_OK) {
-        fprintf(stderr, "nlctl: send failed: %s\n", nl_strerror(st));
+    if (st != LW_OK) {
+        fprintf(stderr, "lwctl: send failed: %s\n", lw_strerror(st));
         close(fd);
         return 1;
     }
 
     st = ipc_read_full(fd, &resp, sizeof(resp));
     close(fd);
-    if (st != NL_OK) {
-        fprintf(stderr, "nlctl: no valid response: %s\n", nl_strerror(st));
+    if (st != LW_OK) {
+        fprintf(stderr, "lwctl: no valid response: %s\n", lw_strerror(st));
         return 1;
     }
 
-    if (resp.version != NL_PROTO_VERSION) {
-        fprintf(stderr, "nlctl: response protocol mismatch\n");
+    if (resp.version != LW_PROTO_VERSION) {
+        fprintf(stderr, "lwctl: response protocol mismatch\n");
         return 1;
     }
 
     resp.text[sizeof(resp.text) - 1] = '\0';
     if (resp.ok) {
-        if (sc->mode == NL_MODE_STATUS)
+        if (sc->mode == LW_MODE_STATUS)
             printf("Current mode: %s\n", resp.text);
         else
             printf("OK\n");
         return 0;
     }
 
-    fprintf(stderr, "nlctl: %s\n", resp.text[0] ? resp.text : "unknown error");
+    fprintf(stderr, "lwctl: %s\n", resp.text[0] ? resp.text : "unknown error");
     return 1;
 }

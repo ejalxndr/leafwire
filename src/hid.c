@@ -1,4 +1,4 @@
-#include "nlctl.h"
+#include "leafwire.h"
 
 #include <hidapi.h>
 #include <stdio.h>
@@ -9,28 +9,28 @@
 
 #include "log.h"
 
-#define NL_VENDOR_ID  0x37FAu
-#define NL_PRODUCT_ID 0x8202u
+#define LW_VENDOR_ID  0x37FAu
+#define LW_PRODUCT_ID 0x8202u
 
-#define NL_REPORT_SIZE 65
-#define NL_READ_SIZE   64
+#define LW_REPORT_SIZE 65
+#define LW_READ_SIZE   64
 
-#define NL_CMD_ZONE_COUNT 0x03
-#define NL_CMD_RGB_DATA   0x02
-#define NL_CMD_INIT_MODE  0x07
-#define NL_CMD_BRIGHTNESS 0x09
+#define LW_CMD_ZONE_COUNT 0x03
+#define LW_CMD_RGB_DATA   0x02
+#define LW_CMD_INIT_MODE  0x07
+#define LW_CMD_BRIGHTNESS 0x09
 
-#define NL_GRB_ORDER_LIMIT 20
+#define LW_GRB_ORDER_LIMIT 20
 
-#define NL_RGB_PKT1_MAX 60
-#define NL_RGB_PKT2_MAX 64
-#define NL_RGB_PKT3_MAX 38
-#define NL_RGB_WIRE_MAX (124 + NL_RGB_PKT3_MAX)
+#define LW_RGB_PKT1_MAX 60
+#define LW_RGB_PKT2_MAX 64
+#define LW_RGB_PKT3_MAX 38
+#define LW_RGB_WIRE_MAX (124 + LW_RGB_PKT3_MAX)
 
-#define NL_WRITE_SETTLE_MS 100
-#define NL_READ_TIMEOUT_MS 200
+#define LW_WRITE_SETTLE_MS 100
+#define LW_READ_TIMEOUT_MS 200
 
-struct nl_device {
+struct lw_device {
     hid_device *dev;
     size_t zone_count;
 };
@@ -46,27 +46,27 @@ static void sleep_ms(unsigned ms)
         ;
 }
 
-static void copy_hid_error(hid_device *dev, char errbuf[NL_ERRBUF])
+static void copy_hid_error(hid_device *dev, char errbuf[LW_ERRBUF])
 {
     const wchar_t *w = hid_error(dev);
     if (w)
-        snprintf(errbuf, NL_ERRBUF, "%ls", w);
+        snprintf(errbuf, LW_ERRBUF, "%ls", w);
     else
-        snprintf(errbuf, NL_ERRBUF, "unknown HID error");
+        snprintf(errbuf, LW_ERRBUF, "unknown HID error");
 }
 
-static nl_status send_command(struct nl_device *d, unsigned char cmd,
+static lw_status send_command(struct lw_device *d, unsigned char cmd,
                               const unsigned char *data, size_t dlen,
                               unsigned char *resp, size_t resp_cap,
-                              char errbuf[NL_ERRBUF])
+                              char errbuf[LW_ERRBUF])
 {
-    unsigned char buf[NL_REPORT_SIZE];
-    unsigned char rbuf[NL_READ_SIZE];
+    unsigned char buf[LW_REPORT_SIZE];
+    unsigned char rbuf[LW_READ_SIZE];
     int n;
 
-    if (dlen > NL_REPORT_SIZE - 4) {
-        snprintf(errbuf, NL_ERRBUF, "command payload too large (%zu)", dlen);
-        return NL_ERR_PROTO;
+    if (dlen > LW_REPORT_SIZE - 4) {
+        snprintf(errbuf, LW_ERRBUF, "command payload too large (%zu)", dlen);
+        return LW_ERR_PROTO;
     }
 
     memset(buf, 0, sizeof(buf));
@@ -78,15 +78,15 @@ static nl_status send_command(struct nl_device *d, unsigned char cmd,
 
     if (hid_write(d->dev, buf, sizeof(buf)) < 0) {
         copy_hid_error(d->dev, errbuf);
-        return NL_ERR_HID_IO;
+        return LW_ERR_HID_IO;
     }
 
-    sleep_ms(NL_WRITE_SETTLE_MS);
+    sleep_ms(LW_WRITE_SETTLE_MS);
 
-    n = hid_read_timeout(d->dev, rbuf, sizeof(rbuf), NL_READ_TIMEOUT_MS);
+    n = hid_read_timeout(d->dev, rbuf, sizeof(rbuf), LW_READ_TIMEOUT_MS);
     if (n < 0) {
         copy_hid_error(d->dev, errbuf);
-        return NL_ERR_HID_IO;
+        return LW_ERR_HID_IO;
     }
 
     if (resp && resp_cap > 0 && n > 0) {
@@ -97,109 +97,109 @@ static nl_status send_command(struct nl_device *d, unsigned char cmd,
             len = sizeof(rbuf);
         memcpy(resp, rbuf, len);
     }
-    return NL_OK;
+    return LW_OK;
 }
 
-static nl_status query_zone_count(struct nl_device *d, char errbuf[NL_ERRBUF])
+static lw_status query_zone_count(struct lw_device *d, char errbuf[LW_ERRBUF])
 {
-    unsigned char resp[NL_READ_SIZE];
-    nl_status st;
+    unsigned char resp[LW_READ_SIZE];
+    lw_status st;
 
     memset(resp, 0, sizeof(resp));
-    st = send_command(d, NL_CMD_ZONE_COUNT, NULL, 0, resp, sizeof(resp), errbuf);
-    if (st != NL_OK)
+    st = send_command(d, LW_CMD_ZONE_COUNT, NULL, 0, resp, sizeof(resp), errbuf);
+    if (st != LW_OK)
         return st;
 
     d->zone_count = resp[4];
-    return NL_OK;
+    return LW_OK;
 }
 
-static nl_status write_rgb_data(struct nl_device *d, const unsigned char *rgb,
-                                size_t len, char errbuf[NL_ERRBUF])
+static lw_status write_rgb_data(struct lw_device *d, const unsigned char *rgb,
+                                size_t len, char errbuf[LW_ERRBUF])
 {
-    unsigned char buf[NL_REPORT_SIZE];
+    unsigned char buf[LW_REPORT_SIZE];
     size_t n;
 
     memset(buf, 0, sizeof(buf));
-    buf[1] = NL_CMD_RGB_DATA;
+    buf[1] = LW_CMD_RGB_DATA;
     buf[2] = (unsigned char)((len >> 8) & 0xFFu);
     buf[3] = (unsigned char)(len & 0xFFu);
-    n = len < NL_RGB_PKT1_MAX ? len : NL_RGB_PKT1_MAX;
+    n = len < LW_RGB_PKT1_MAX ? len : LW_RGB_PKT1_MAX;
     memcpy(buf + 4, rgb, n);
     if (hid_write(d->dev, buf, sizeof(buf)) < 0) {
         copy_hid_error(d->dev, errbuf);
-        return NL_ERR_HID_IO;
+        return LW_ERR_HID_IO;
     }
 
     memset(buf, 0, sizeof(buf));
     if (len > 60) {
         n = len - 60;
-        if (n > NL_RGB_PKT2_MAX)
-            n = NL_RGB_PKT2_MAX;
+        if (n > LW_RGB_PKT2_MAX)
+            n = LW_RGB_PKT2_MAX;
         memcpy(buf + 1, rgb + 60, n);
     }
     if (hid_write(d->dev, buf, sizeof(buf)) < 0) {
         copy_hid_error(d->dev, errbuf);
-        return NL_ERR_HID_IO;
+        return LW_ERR_HID_IO;
     }
 
     memset(buf, 0, sizeof(buf));
     if (len > 124) {
         n = len - 124;
-        if (n > NL_RGB_PKT3_MAX)
-            n = NL_RGB_PKT3_MAX;
+        if (n > LW_RGB_PKT3_MAX)
+            n = LW_RGB_PKT3_MAX;
         memcpy(buf + 1, rgb + 124, n);
     }
     if (hid_write(d->dev, buf, sizeof(buf)) < 0) {
         copy_hid_error(d->dev, errbuf);
-        return NL_ERR_HID_IO;
+        return LW_ERR_HID_IO;
     }
 
-    return NL_OK;
+    return LW_OK;
 }
 
-nl_status nl_device_open(struct nl_device **out, char errbuf[NL_ERRBUF])
+lw_status lw_device_open(struct lw_device **out, char errbuf[LW_ERRBUF])
 {
-    struct nl_device *d;
-    nl_status st;
+    struct lw_device *d;
+    lw_status st;
 
     *out = NULL;
 
     if (!hid_ready) {
         if (hid_init() != 0) {
-            snprintf(errbuf, NL_ERRBUF, "hid_init failed");
-            return NL_ERR_HID_INIT;
+            snprintf(errbuf, LW_ERRBUF, "hid_init failed");
+            return LW_ERR_HID_INIT;
         }
         hid_ready = 1;
     }
 
     d = calloc(1, sizeof(*d));
     if (!d) {
-        snprintf(errbuf, NL_ERRBUF, "out of memory");
-        return NL_ERR_NOMEM;
+        snprintf(errbuf, LW_ERRBUF, "out of memory");
+        return LW_ERR_NOMEM;
     }
 
-    d->dev = hid_open(NL_VENDOR_ID, NL_PRODUCT_ID, NULL);
+    d->dev = hid_open(LW_VENDOR_ID, LW_PRODUCT_ID, NULL);
     if (!d->dev) {
-        snprintf(errbuf, NL_ERRBUF,
+        snprintf(errbuf, LW_ERRBUF,
                  "could not open HID device %04x:%04x (permissions? not connected?)",
-                 NL_VENDOR_ID, NL_PRODUCT_ID);
+                 LW_VENDOR_ID, LW_PRODUCT_ID);
         free(d);
-        return NL_ERR_HID_OPEN;
+        return LW_ERR_HID_OPEN;
     }
 
     st = query_zone_count(d, errbuf);
-    if (st != NL_OK) {
+    if (st != LW_OK) {
         hid_close(d->dev);
         free(d);
         return st;
     }
 
     *out = d;
-    return NL_OK;
+    return LW_OK;
 }
 
-void nl_device_close(struct nl_device *d)
+void lw_device_close(struct lw_device *d)
 {
     if (!d)
         return;
@@ -208,43 +208,43 @@ void nl_device_close(struct nl_device *d)
     free(d);
 }
 
-size_t nl_device_zone_count(const struct nl_device *d)
+size_t lw_device_zone_count(const struct lw_device *d)
 {
     return d->zone_count;
 }
 
-nl_status nl_device_initialize(struct nl_device *d, char errbuf[NL_ERRBUF])
+lw_status lw_device_initialize(struct lw_device *d, char errbuf[LW_ERRBUF])
 {
     static const unsigned char on = 1;
     static const unsigned char full = 255;
-    nl_status st;
+    lw_status st;
 
-    st = send_command(d, NL_CMD_INIT_MODE, &on, 1, NULL, 0, errbuf);
-    if (st != NL_OK)
+    st = send_command(d, LW_CMD_INIT_MODE, &on, 1, NULL, 0, errbuf);
+    if (st != LW_OK)
         return st;
-    return send_command(d, NL_CMD_BRIGHTNESS, &full, 1, NULL, 0, errbuf);
+    return send_command(d, LW_CMD_BRIGHTNESS, &full, 1, NULL, 0, errbuf);
 }
 
-nl_status nl_device_set_colors(struct nl_device *d, const struct nl_color *colors,
-                               size_t n, char errbuf[NL_ERRBUF])
+lw_status lw_device_set_colors(struct lw_device *d, const struct lw_color *colors,
+                               size_t n, char errbuf[LW_ERRBUF])
 {
-    unsigned char rgb[NL_RGB_WIRE_MAX];
+    unsigned char rgb[LW_RGB_WIRE_MAX];
     size_t i;
     size_t wire;
     static int overflow_warned;
 
     if (n > sizeof(rgb) / 3) {
         if (!overflow_warned) {
-            nl_warn("zone count %zu exceeds wire capacity %d; extra zones ignored",
-                    n, NL_RGB_WIRE_MAX / 3);
+            lw_warn("zone count %zu exceeds wire capacity %d; extra zones ignored",
+                    n, LW_RGB_WIRE_MAX / 3);
             overflow_warned = 1;
         }
         n = sizeof(rgb) / 3;
     }
 
     for (i = 0; i < n; i++) {
-        struct nl_color c = colors[i];
-        if (i < NL_GRB_ORDER_LIMIT) {
+        struct lw_color c = colors[i];
+        if (i < LW_GRB_ORDER_LIMIT) {
             rgb[i * 3 + 0] = c.g;
             rgb[i * 3 + 1] = c.r;
             rgb[i * 3 + 2] = c.b;
@@ -259,7 +259,7 @@ nl_status nl_device_set_colors(struct nl_device *d, const struct nl_color *color
     return write_rgb_data(d, rgb, wire, errbuf);
 }
 
-void nl_lib_shutdown(void)
+void lw_lib_shutdown(void)
 {
     if (hid_ready) {
         hid_exit();

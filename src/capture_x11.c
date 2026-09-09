@@ -10,7 +10,7 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/XShm.h>
 
-struct nl_capture {
+struct lw_capture {
     Display *dpy;
     Window root;
     int screen_w;
@@ -23,7 +23,7 @@ struct nl_capture {
     float last_percent;
 };
 
-static void teardown_image(struct nl_capture *c)
+static void teardown_image(struct lw_capture *c)
 {
     if (!c->ximg)
         return;
@@ -42,7 +42,7 @@ static void teardown_image(struct nl_capture *c)
     }
 }
 
-static void reallocate_shm(struct nl_capture *c, int w, int h)
+static void reallocate_shm(struct lw_capture *c, int w, int h)
 {
     int screen;
     Visual *visual;
@@ -97,27 +97,27 @@ static void reallocate_shm(struct nl_capture *c, int w, int h)
     shmctl(c->shminfo.shmid, IPC_RMID, NULL);
 }
 
-nl_status nl_capture_new(struct nl_capture **out, const char *display,
-                         char errbuf[NL_ERRBUF])
+lw_status lw_capture_new(struct lw_capture **out, const char *display,
+                         char errbuf[LW_ERRBUF])
 {
-    struct nl_capture *c;
+    struct lw_capture *c;
     XWindowAttributes attrs;
 
     *out = NULL;
 
     c = calloc(1, sizeof(*c));
     if (!c) {
-        snprintf(errbuf, NL_ERRBUF, "out of memory");
-        return NL_ERR_NOMEM;
+        snprintf(errbuf, LW_ERRBUF, "out of memory");
+        return LW_ERR_NOMEM;
     }
     c->shminfo.shmid = -1;
 
     c->dpy = XOpenDisplay((display && display[0]) ? display : NULL);
     if (!c->dpy) {
-        snprintf(errbuf, NL_ERRBUF, "could not open X display '%s'",
+        snprintf(errbuf, LW_ERRBUF, "could not open X display '%s'",
                  (display && display[0]) ? display : "(default)");
         free(c);
-        return NL_ERR_X_OPEN;
+        return LW_ERR_X_OPEN;
     }
 
     c->root = DefaultRootWindow(c->dpy);
@@ -128,10 +128,10 @@ nl_status nl_capture_new(struct nl_capture **out, const char *display,
     c->use_shm = XShmQueryExtension(c->dpy) ? 1 : 0;
 
     *out = c;
-    return NL_OK;
+    return LW_OK;
 }
 
-void nl_capture_free(struct nl_capture *c)
+void lw_capture_free(struct lw_capture *c)
 {
     if (!c)
         return;
@@ -141,7 +141,7 @@ void nl_capture_free(struct nl_capture *c)
     free(c);
 }
 
-int nl_capture_grab(struct nl_capture *c, float percent)
+int lw_capture_grab(struct lw_capture *c, float percent)
 {
     int cx, cy;
     unsigned long all_planes = AllPlanes;
@@ -173,7 +173,7 @@ int nl_capture_grab(struct nl_capture *c, float percent)
     return c->ximg ? 1 : 0;
 }
 
-const uint8_t *nl_capture_data(const struct nl_capture *c, size_t *len)
+const uint8_t *lw_capture_data(const struct lw_capture *c, size_t *len)
 {
     if (!c->ximg) {
         if (len)
@@ -185,17 +185,17 @@ const uint8_t *nl_capture_data(const struct nl_capture *c, size_t *len)
     return (const uint8_t *)c->ximg->data;
 }
 
-int nl_capture_width(const struct nl_capture *c)
+int lw_capture_width(const struct lw_capture *c)
 {
     return c->capture_w;
 }
 
-int nl_capture_height(const struct nl_capture *c)
+int lw_capture_height(const struct lw_capture *c)
 {
     return c->capture_h;
 }
 
-int nl_capture_bpp(const struct nl_capture *c)
+int lw_capture_bpp(const struct lw_capture *c)
 {
     if (!c->ximg)
         return 4;

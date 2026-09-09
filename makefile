@@ -16,14 +16,14 @@ PREFIX   ?= /usr/local
 BINDIR    = $(PREFIX)/bin
 UNITDIR  ?= /etc/systemd/system
 
-LIB_SRC   = src/nl_status.c src/color.c src/hid.c src/capture_x11.c \
+LIB_SRC   = src/lw_status.c src/color.c src/hid.c src/capture_x11.c \
             src/zone.c src/anim.c src/ipc.c
 LIB_OBJ   = $(LIB_SRC:src/%.c=$(BUILD)/%.o)
-LIB       = $(BUILD)/libnlctl.a
+LIB       = $(BUILD)/libleafwire.a
 
-DAEMON    = $(BUILD)/nlctld
-CLIENT    = $(BUILD)/nlctl
-SELFTEST  = $(BUILD)/nl-selftest
+DAEMON    = $(BUILD)/lwd
+CLIENT    = $(BUILD)/lwctl
+SELFTEST  = $(BUILD)/lw-selftest
 
 TEST_SRC  = $(wildcard tests/test_*.c)
 TEST_BIN  = $(TEST_SRC:tests/%.c=$(BUILD)/tests/%)
@@ -38,13 +38,13 @@ $(BUILD)/%.o: src/%.c | $(BUILD)
 $(LIB): $(LIB_OBJ)
 	$(AR) rcs $@ $^
 
-$(DAEMON): $(BUILD)/nlctld.o $(LIB)
+$(DAEMON): $(BUILD)/lwd.o $(LIB)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(CLIENT): $(BUILD)/nlctl.o $(LIB)
+$(CLIENT): $(BUILD)/lwctl.o $(LIB)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(SELFTEST): $(BUILD)/nl-selftest.o $(LIB)
+$(SELFTEST): $(BUILD)/lw-selftest.o $(LIB)
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(BUILD)/tests/%: tests/%.c $(LIB) | $(BUILD)/tests
@@ -68,4 +68,4 @@ install: all
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 0755 $(DAEMON) $(CLIENT) $(DESTDIR)$(BINDIR)/
 	install -d $(DESTDIR)$(UNITDIR)
-	install -m 0644 assets/nlctld.service $(DESTDIR)$(UNITDIR)/
+	install -m 0644 assets/lwd.service $(DESTDIR)$(UNITDIR)/

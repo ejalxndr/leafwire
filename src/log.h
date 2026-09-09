@@ -1,29 +1,29 @@
-#ifndef NL_LOG_H
-#define NL_LOG_H
+#ifndef LW_LOG_H
+#define LW_LOG_H
 
 #include <stdio.h>
 
-#ifndef NL_LOG_PREFIX
-#define NL_LOG_PREFIX "nlctl"
+#ifndef LW_LOG_PREFIX
+#define LW_LOG_PREFIX "lwctl"
 #endif
 
-#define nl_info(...)                                     \
+#define lw_info(...)                                     \
     do {                                                 \
-        fprintf(stderr, NL_LOG_PREFIX ": ");             \
+        fprintf(stderr, LW_LOG_PREFIX ": ");             \
         fprintf(stderr, __VA_ARGS__);                    \
         fputc('\n', stderr);                             \
     } while (0)
 
-#define nl_warn(...)                                     \
+#define lw_warn(...)                                     \
     do {                                                 \
-        fprintf(stderr, NL_LOG_PREFIX ": warning: ");    \
+        fprintf(stderr, LW_LOG_PREFIX ": warning: ");    \
         fprintf(stderr, __VA_ARGS__);                    \
         fputc('\n', stderr);                             \
     } while (0)
 
-#define nl_err(...)                                      \
+#define lw_err(...)                                      \
     do {                                                 \
-        fprintf(stderr, NL_LOG_PREFIX ": error: ");      \
+        fprintf(stderr, LW_LOG_PREFIX ": error: ");      \
         fprintf(stderr, __VA_ARGS__);                    \
         fputc('\n', stderr);                             \
     } while (0)
